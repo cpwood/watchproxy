@@ -1,0 +1,19 @@
+{
+  "name": "watchproxy",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "async-mutex": "^0.3.2",
+    "axios": "^0.26.1",
+    "express": "^4.17.3",
+    "node-stringbuilder": "^2.2.6",
+    "selenium-webdriver": "^4.1.1"
+  }
+}
