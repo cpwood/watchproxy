@@ -92,7 +92,7 @@ services:
 Alternatively, use the following example `docker` command:
 
 ```
-docker run -p 8080:8080 -v ./config:/config cpwood/watchproxy.latest
+docker run -p 8080:8080 -v ./config:/config cpwood/watchproxy:latest
 ```
 
 ## Using the running container
