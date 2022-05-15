@@ -1,17 +1,12 @@
 'use strict';
 
 import express from 'express';
-import { Builder } from 'selenium-webdriver';
-import { FoxFooty } from './fox-footy.js';
-import { FoxLeague } from './fox-league.js';
-import { Mutex } from 'async-mutex';
-import { ConfigService } from './config-service.js';
 import StringBuilder from 'node-stringbuilder';
+import { ConfigService } from './config-service.js';
+import { WatchClient } from './watch-client.js';
 
-const mutex = new Mutex();
-const configService = new ConfigService();
-
-let driver = null;
+const configService = new ConfigService(process.env.CONFIG_FILE ?? './config/config.json');
+const watchClient = new WatchClient();
 
 // Constants
 const PORT = 8080;
@@ -20,43 +15,24 @@ const HOST = '0.0.0.0';
 // App
 const app = express();
 
-const createDriver = async () => {
-    if (!driver) {
-        driver = await new Builder()
-            .forBrowser('chrome')
-            .usingServer(`http://${await configService.get('seleniumIp')}/wd/hub`)
-            .build();
-    }
-};
-
-const shutDown = async () => {
-    const release = await mutex.acquire();
-
-    if (driver) {
-        console.log();
-        console.log('Stopping Selenium driver..');
-        
-        await driver.quit();
-        driver = null;
-    }
-
-    release();
-    process.exit(0);
-};
-
 app.get('/index.m3u8', async (req, res) => {
+    const config = await configService.load();
     const output = new StringBuilder();
 
     output.appendLine('#EXTM3U');
     output.appendLine();
 
-    output.appendLine('#EXTINF:-1 tvg-id="FAF" tvg-logo="https://www.foxtel.com.au/content/dam/foxtel/shared/channel/FAF/FAF_425x243.png",FOX Footy');
-    output.appendLine('/fox-footy/master.m3u8');
-    output.appendLine('');
+    if (configService.validate(config, 'footy')) {
+        output.appendLine(`#EXTINF:-1 tvg-id="${config.footy.channelId ?? '53212'}" tvg-logo="https://raw.githubusercontent.com/cpwood/watchproxy/main/logos/footy.png",FOX Footy`);
+        output.appendLine('/fox-footy/master.m3u8');
+        output.appendLine('');
+    }
 
-    output.appendLine('#EXTINF:-1 tvg-id="SP2" tvg-logo="https://www.foxtel.com.au/content/dam/foxtel/shared/channel/SP2/SP2_425x243.png",FOX League');
-    output.appendLine('/fox-league/master.m3u8');
-    output.appendLine('');
+    if (configService.validate(config, 'league')) {
+        output.appendLine(`#EXTINF:-1 tvg-id="${config.league.channelId ?? '53210'}" tvg-logo="https://raw.githubusercontent.com/cpwood/watchproxy/main/logos/league.png",FOX League`);
+        output.appendLine('/fox-league/master.m3u8');
+        output.appendLine('');
+    }
 
     res.setHeader('Content-Type', 'application/x-mpegURL');
     res.setHeader('Content-Disposition', 'attachment; filename="index.m3u8"');
@@ -64,35 +40,36 @@ app.get('/index.m3u8', async (req, res) => {
 });
 
 app.get('/fox-footy/master.m3u8', async (req, res) => {
-    await createDriver();
+    const config = await configService.load();
+
+    if (!configService.validate(config, 'footy'))
+        res.status(401);
 
     const start = performance.now();
-    const agent = new FoxFooty();
-    const result = await agent.getUrl(driver, configService);
-
+    const result = await watchClient.getUrl('https://www.watchafl.com.au/fox-footy', config.footy);
     const end = performance.now();
-    console.log(`Stream loading took ${end - start} milliseconds`);
+
+    console.log(`Stream loading for FOX Footy took ${end - start} milliseconds`);
     console.log();
 
     res.redirect(result);
 });
 
 app.get('/fox-league/master.m3u8', async (req, res) => {
-    await createDriver();
+    const config = await configService.load();
+
+    if (!configService.validate(config, 'league'))
+        res.status(401);
 
     const start = performance.now();
-    const agent = new FoxLeague();
-    const result = await agent.getUrl(driver, configService);
-
+    const result = await watchClient.getUrl('https://www.watchnrl.com/fox-league', config.league);
     const end = performance.now();
-    console.log(`Stream loading took ${end - start} milliseconds`);
+    
+    console.log(`Stream loading for FOX League took ${end - start} milliseconds`);
     console.log();
 
     res.redirect(result);
 });
-
-process.on('SIGTERM', shutDown);
-process.on('SIGINT', shutDown);
 
 app.listen(PORT, HOST);
 console.log(`Running on http://${HOST}:${PORT}`);

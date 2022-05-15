@@ -1,5 +1,7 @@
 FROM node:16
 
+ENV CONFIG_FILE=/config/config.json
+
 # Create app directory
 WORKDIR /usr/src/app
 
